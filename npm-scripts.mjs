@@ -1,5 +1,6 @@
 import esbuild from 'esbuild';
 import fs from 'fs';
+import open from 'open';
 import path from 'path';
 import process from 'process';
 import { execSync } from 'child_process';
@@ -53,7 +54,7 @@ async function run() {
 		}
 
 		case 'coverage': {
-			coverage();
+			await coverage();
 
 			break;
 		}
@@ -96,7 +97,7 @@ async function run() {
 		case 'docs:watch': {
 			generateDocs();
 
-			executeCmd('open-cli docs/index.html');
+			await open('docs/index.html');
 			executeCmd('typedoc --watch');
 
 			break;
@@ -128,11 +129,11 @@ function test() {
 	executeCmd(`jest --silent false --detectOpenHandles ${taskArgs}`);
 }
 
-function coverage() {
+async function coverage() {
 	logInfo('coverage()');
 
 	executeCmd(`jest --coverage ${taskArgs}`);
-	executeCmd('open-cli coverage/lcov-report/index.html');
+	await open('coverage/lcov-report/index.html');
 }
 
 function grammar() {
@@ -207,8 +208,14 @@ function buildTypescript() {
 	executeCmd(`tsc ${taskArgs}`);
 
 	// Copy manual .d.ts files to lib/ until code is moved to TS and declaration files
-	// are automatically created.
-	executeCmd("cpx 'src/**/**.d.ts' lib/");
+	// are automatically created. Node's native copy avoids the unmaintained cpx
+	// dependency while preserving its directory layout.
+	fs.cpSync('src', 'lib', {
+		recursive: true,
+		filter(source) {
+			return fs.statSync(source).isDirectory() || source.endsWith('.d.ts');
+		},
+	});
 }
 
 function deleteLib() {
